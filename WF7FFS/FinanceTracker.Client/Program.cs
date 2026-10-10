@@ -1,29 +1,33 @@
 using FinanceTracker.Core.Exceptions;
 using FinanceTracker.Core.Models;
+using FinanceTracker.Core.Persistence;
 
 // Dummy adat
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
+string filePath = Path.Combine(Path.GetTempPath(), "FinanceTracker-demo", "transactions.json");
+
 try
 {
-    Transaction lunch = new TransactionBuilder()
-        .OnDate(new DateOnly(2026, 10, 9))
-        .WithAmount(2490m)
-        .AsExpense()
-        .InCategory("Étkezés")
-        .Described("Ebéd az egyetemen")
-        .Build();
+    ITransactionRepository repository = new JsonTransactionRepository(filePath);
 
-    Console.WriteLine(lunch);
+    List<Transaction> transactions = new()
+    {
+        Transaction.Create(new DateOnly(2026, 10, 1), 450000m, TransactionType.Income, "Fizetés", "Októberi bér"),
+        Transaction.Create(new DateOnly(2026, 10, 9), 2490m, TransactionType.Expense, "Étkezés", "Ebéd az egyetemen")
+    };
 
-    Transaction corrected = lunch with { Amount = 2690m };
-    Console.WriteLine(corrected);
-    Console.WriteLine($"Az eredeti összeg változatlan: {lunch.Amount}; azonos a két példány? {lunch == corrected}");
+    await repository.SaveAsync(transactions);
+    Console.WriteLine($"Mentve: {filePath}");
 
-    // validacio
-    _ = lunch with { Amount = -5m };
+    IReadOnlyList<Transaction> loaded = await repository.LoadAsync();
+    Console.WriteLine($"Visszatöltve {loaded.Count} tranzakció, azonos az eredetivel? {loaded.SequenceEqual(transactions)}");
+
+    // direkt error, hogy lássuk az exceptiont
+    await File.WriteAllTextAsync(filePath, "{ ez nem json ");
+    await repository.LoadAsync();
 }
-catch (InvalidTransactionException ex)
+catch (FinanceTrackerException ex)
 {
     Console.WriteLine($"Hiba: {ex.Message}");
 }
